@@ -4,10 +4,11 @@ train_shortest_path.py
 Evaluates your maze dataset using A* shortest-path search.
 
 This version:
-    ✔ No maze size filtering — uses ALL maze sizes automatically
+    ✔ Uses ALL maze sizes automatically
     ✔ Works with 10×10 through 150×150 mazes
     ✔ Solves using A* (fast and optimal)
-    ✔ Optional visualization through MazeEnv
+    ✔ Tracks solved %, avg path length
+    ✔ Renders ONLY the final maze if enabled
 """
 
 import heapq
@@ -22,10 +23,12 @@ from maze_env import MazeEnv
 # USER CONTROLS
 # ===============================================================
 
-MAX_EVAL = 20        # Evaluate this many mazes total
-USE_PERFECT = True   # Include mazes/perfect_mazes
-USE_IMPERFECT = True # Include mazes/imperfect_mazes
-RENDER = True        # Visualize solution in Pygame window
+MAX_EVAL = 20
+USE_PERFECT = True
+USE_IMPERFECT = True
+
+RENDER_DURING_EVAL = False    # <-- No renders during evaluation loops
+RENDER_FINAL = True           # <-- Only render the very LAST solved maze
 
 
 # ===============================================================
@@ -38,7 +41,7 @@ def astar_solve(maze):
     goal = (n - 1, n - 1)
 
     if maze[start] == 1 or maze[goal] == 1:
-        return None  # unsolvable
+        return None
 
     def heuristic(a, b):
         return abs(a[0] - b[0]) + abs(a[1] - b[1])
@@ -52,6 +55,7 @@ def astar_solve(maze):
 
         if (r, c) in visited:
             continue
+
         visited.add((r, c))
         parents[(r, c)] = parent
 
@@ -72,7 +76,8 @@ def astar_solve(maze):
                     priority = cost + 1 + heuristic((nr, nc), goal)
                     heapq.heappush(pq, (priority, cost + 1, (nr, nc), (r, c)))
 
-    return None  # unsolvable
+    return None
+
 
 
 # ===============================================================
@@ -84,7 +89,7 @@ print(f"[INFO] Dataset loaded: {dataset.total_perfect()} perfect, {dataset.total
 
 
 # ===============================================================
-# Build evaluation list (no size filtering)
+# Build evaluation list
 # ===============================================================
 
 maze_files = []
@@ -100,9 +105,15 @@ maze_files = maze_files[:MAX_EVAL]
 print(f"[INFO] Evaluating {len(maze_files)} total mazes\n")
 
 
+
 # ===============================================================
 # EVALUATION LOOP
 # ===============================================================
+
+solved = 0
+total_path_length = 0
+last_solved_maze = None
+last_solved_path = None
 
 for i, path in enumerate(maze_files, start=1):
 
@@ -117,13 +128,45 @@ for i, path in enumerate(maze_files, start=1):
 
     print(f"    ✔ Solved! Path length = {len(path_cells)}")
 
-    if RENDER:
-        env = MazeEnv(maze, render_mode="human")
-        env.reset()
+    solved += 1
+    total_path_length += len(path_cells)
+    last_solved_maze = maze
+    last_solved_path = path_cells
 
-        # animate solution
-        for (r, c) in path_cells:
-            env.agent_pos = (r, c)
-            env.render()
 
-        env.close()
+
+# ===============================================================
+# METRICS SUMMARY
+# ===============================================================
+
+print("\n==================== SUMMARY ====================")
+print(f"Solved: {solved}/{len(maze_files)}  ({solved/len(maze_files)*100:.1f}%)")
+
+if solved > 0:
+    print(f"Average Path Length: {total_path_length/solved:.1f}")
+else:
+    print("Average Path Length: N/A (no solved mazes)")
+
+print("=================================================\n")
+
+
+
+# ===============================================================
+# RENDER FINAL MAZE ONLY
+# ===============================================================
+
+if RENDER_FINAL and last_solved_maze is not None:
+    print("[INFO] Rendering FINAL solved maze...\n")
+
+    env = MazeEnv(last_solved_maze, render_mode="human")
+    env.reset()
+
+    for (r, c) in last_solved_path:
+        env.agent_pos = (r, c)
+        env.render()
+
+    env.close()
+
+else:
+    print("[INFO] No final maze rendered (either disabled or no solved maze).")
+
